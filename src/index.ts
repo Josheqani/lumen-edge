@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { handleVlessWebSocket, renderCamouflageResponse } from "./core";
 
 export interface Env {
   DB: D1Database;
@@ -11,8 +12,34 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/", (c) => {
-  return c.text("Lumen Edge");
+// VLESS WebSocket Proxy endpoint
+app.all("*", async (c, next) => {
+  const wsPath = c.env.WS_PATH || "/api/v1/ws";
+  const url = new URL(c.req.url);
+
+  if (url.pathname === wsPath) {
+    const upgrade = c.req.header("Upgrade");
+    if (!upgrade || upgrade.toLowerCase() !== "websocket") {
+      return renderCamouflageResponse();
+    }
+    const ctx = {
+      waitUntil: (promise: Promise<unknown>) => {
+        try {
+          c.executionCtx.waitUntil(promise);
+        } catch {
+          promise.catch((err) => console.error("Unhandled async task:", err));
+        }
+      },
+    };
+    return handleVlessWebSocket(c.req.raw, c.env, ctx);
+  }
+
+  await next();
+});
+
+// Default fallback to camouflage landing page
+app.get("/", () => {
+  return renderCamouflageResponse();
 });
 
 export default app;
