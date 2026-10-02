@@ -117,7 +117,64 @@ export async function handleVlessWebSocket(
           return;
         }
 
-        // Establish outbound TCP connection
+        // Check for Backend VPS forwarding mode
+        let settings = null;
+        try {
+          const { getAllSettings } = await import("../db/settings");
+          settings = await getAllSettings(env.DB);
+        } catch {
+          // ignore
+        }
+
+        let handledByBackend = false;
+        if (settings?.outbound_mode === "backend" && settings.backend_config?.url) {
+          try {
+            const resp = await fetch(settings.backend_config.url, {
+              headers: { Upgrade: "websocket" },
+            });
+            const backendWs = resp.webSocket;
+            if (backendWs) {
+              backendWs.accept();
+              backendWs.send(rawData);
+              bytesIn += rawData.byteLength;
+
+              let backendClosed = false;
+              const closeAll = async () => {
+                if (backendClosed) return;
+                backendClosed = true;
+                try { backendWs.close(); } catch {}
+                await cleanup();
+              };
+
+              serverWs.addEventListener("message", (e: MessageEvent) => {
+                if (backendClosed) return;
+                const d = e.data;
+                const len = d instanceof ArrayBuffer ? d.byteLength : (ArrayBuffer.isView(d) ? d.byteLength : 0);
+                bytesIn += len;
+                backendWs.send(d);
+              });
+              serverWs.addEventListener("close", closeAll);
+              serverWs.addEventListener("error", closeAll);
+
+              backendWs.addEventListener("message", (e: MessageEvent) => {
+                if (backendClosed) return;
+                const d = e.data;
+                const len = d instanceof ArrayBuffer ? d.byteLength : (ArrayBuffer.isView(d) ? d.byteLength : 0);
+                bytesOut += len;
+                serverWs.send(d);
+              });
+              backendWs.addEventListener("close", closeAll);
+              backendWs.addEventListener("error", closeAll);
+
+              handledByBackend = true;
+              return;
+            }
+          } catch (err) {
+            console.warn("Backend VPS forwarding failed, falling back to direct:", err);
+          }
+        }
+
+        // Establish outbound TCP connection (Direct or SOCKS5)
         try {
           outbound = await createOutboundConnection(
             header.address,
