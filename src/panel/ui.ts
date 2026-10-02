@@ -406,6 +406,10 @@ export function renderPanelHtml(panelPath: string, wsPath: string): string {
               <option value="backend">Backend VPS Forwarding</option>
             </select>
           </div>
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label>Proxy IP (Fallback IP for Direct Mode)</label>
+            <input type="text" id="proxy-ip" class="form-control" placeholder="e.g. 1.2.3.4 (Optional)">
+          </div>
 
           <div id="socks5-fields" class="hidden" style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">
             <h4 style="margin-bottom: 0.5rem; font-size: 0.95rem;">SOCKS5 Configuration</h4>
@@ -963,6 +967,8 @@ export function renderPanelHtml(panelPath: string, wsPath: string): string {
           document.getElementById("setting-outbound-mode").value = globalSettings.outbound_mode || "direct";
           toggleOutboundInputs(globalSettings.outbound_mode);
 
+          document.getElementById("proxy-ip").value = globalSettings.proxy_ip || "";
+
           if (globalSettings.socks5_config) {
             document.getElementById("socks5-host").value = globalSettings.socks5_config.host || "";
             document.getElementById("socks5-port").value = globalSettings.socks5_config.port || "";
@@ -1033,6 +1039,7 @@ export function renderPanelHtml(panelPath: string, wsPath: string): string {
 
     async function saveSettings() {
       const mode = document.getElementById("setting-outbound-mode").value;
+      const proxy_ip = document.getElementById("proxy-ip").value.trim() || undefined;
       const socks5_config = {
         host: document.getElementById("socks5-host").value.trim(),
         port: parseInt(document.getElementById("socks5-port").value) || 1080,
@@ -1045,6 +1052,7 @@ export function renderPanelHtml(panelPath: string, wsPath: string): string {
 
       const payload = {
         outbound_mode: mode,
+        proxy_ip,
         endpoints: globalSettings.endpoints,
         socks5_config,
         backend_config

@@ -73,6 +73,7 @@ export interface BackendConfig {
 export interface AppSettings {
   outbound_mode: OutboundMode;
   endpoints: EndpointConfig[];
+  proxy_ip?: string;
   socks5_config?: Socks5Config;
   backend_config?: BackendConfig;
 }

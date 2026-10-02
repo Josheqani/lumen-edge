@@ -31,13 +31,19 @@ export function generateVlessLinks(
     const host = ep.host || workerHost;
     const remark = `${user.name} [${ep.label}]`;
 
+    const wsPathWithEd = wsPath.includes("ed=")
+      ? wsPath
+      : wsPath.includes("?")
+      ? `${wsPath}&ed=2560`
+      : `${wsPath}?ed=2560`;
+
     const params = new URLSearchParams({
       security: "tls",
       encryption: "none",
       type: "ws",
       headerType: "none",
       host: host,
-      path: wsPath,
+      path: wsPathWithEd,
       sni: sni,
       fp: "chrome",
     });

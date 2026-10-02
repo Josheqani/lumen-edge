@@ -10,6 +10,8 @@ export interface OutboundConnection {
 type ConnectFn = (address: { hostname: string; port: number }) => {
   readable: ReadableStream<Uint8Array>;
   writable: WritableStream<Uint8Array>;
+  opened?: Promise<unknown>;
+  closed?: Promise<unknown>;
   close: () => Promise<void>;
 };
 
@@ -20,10 +22,39 @@ async function getSocketsConnect(): Promise<ConnectFn> {
 
 export async function createDirectConnection(
   hostname: string,
-  port: number
+  port: number,
+  proxyIp?: string
 ): Promise<OutboundConnection> {
   const connect = await getSocketsConnect();
-  const socket = connect({ hostname, port });
+
+  async function dial(host: string, p: number) {
+    const sock = connect({ hostname: host, port: p });
+    if (sock.opened) {
+      await Promise.race([
+        sock.opened,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`TCP connect timeout to ${host}:${p}`)), 4000)
+        ),
+      ]);
+    }
+    return sock;
+  }
+
+  let socket;
+  try {
+    socket = await dial(hostname, port);
+  } catch (err) {
+    if (proxyIp && proxyIp !== hostname) {
+      try {
+        socket = await dial(proxyIp, port);
+      } catch {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
+
   return {
     readable: socket.readable,
     writable: socket.writable,
@@ -211,10 +242,10 @@ export async function createOutboundConnection(
       );
     } catch (err) {
       console.warn("SOCKS5 outbound connection failed, falling back to direct:", err);
-      return createDirectConnection(targetHost, targetPort);
+      return createDirectConnection(targetHost, targetPort, settings?.proxy_ip);
     }
   }
 
   // Fallback / default is direct
-  return createDirectConnection(targetHost, targetPort);
+  return createDirectConnection(targetHost, targetPort, settings?.proxy_ip);
 }

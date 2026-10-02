@@ -119,6 +119,8 @@ export async function getAllSettings(
     ];
   }
 
+  let proxy_ip: string | undefined = map.get("proxy_ip") || undefined;
+
   let socks5_config: Socks5Config | undefined;
   const rawSocks = map.get("socks5_config");
   if (rawSocks) {
@@ -142,6 +144,7 @@ export async function getAllSettings(
   return {
     outbound_mode,
     endpoints,
+    proxy_ip,
     socks5_config,
     backend_config,
   };
@@ -160,6 +163,16 @@ export async function saveAllSettings(
           "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
         )
         .bind("outbound_mode", settings.outbound_mode)
+    );
+  }
+
+  if (settings.proxy_ip !== undefined) {
+    statements.push(
+      db
+        .prepare(
+          "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        .bind("proxy_ip", settings.proxy_ip)
     );
   }
 
