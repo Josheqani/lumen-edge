@@ -1,0 +1,20 @@
+{
+  "name": "lumen-edge",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "build": "bun run scripts/build.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261002.1",
+    "@types/bun": "latest",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.146.0"
+  },
+  "dependencies": {
+    "hono": "^4.13.12"
+  }
+}
