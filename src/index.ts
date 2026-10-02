@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { handleVlessWebSocket, renderCamouflageResponse } from "./core";
-import { api } from "./panel";
+import { api, renderPanelHtml } from "./panel";
 
 export interface Env {
   DB: D1Database;
@@ -38,10 +38,30 @@ app.all("*", async (c, next) => {
   await next();
 });
 
-// 2. Panel API endpoints (/api/*)
+// 2. Panel Admin UI (served from configurable PANEL_PATH)
+app.get("*", async (c, next) => {
+  const panelPath = c.env.PANEL_PATH || "/_panel";
+  const url = new URL(c.req.url);
+
+  if (url.pathname === panelPath || url.pathname === `${panelPath}/`) {
+    const wsPath = c.env.WS_PATH || "/api/v1/ws";
+    const html = renderPanelHtml(panelPath, wsPath);
+    return new Response(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
+    });
+  }
+
+  await next();
+});
+
+// 3. Panel API endpoints (/api/*)
 app.route("/", api);
 
-// 3. Camouflage landing page on root or 404
+// 4. Default fallback to camouflage landing page on root or unhandled routes
 app.get("/", () => {
   return renderCamouflageResponse();
 });

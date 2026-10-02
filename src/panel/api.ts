@@ -55,7 +55,7 @@ function getClientIp(req: Request): string {
 const api = new Hono<{ Bindings: PanelEnv }>();
 
 // Auth Middleware for protected /api routes
-api.use("*", async (c, next) => {
+api.use("/api/*", async (c, next) => {
   const path = c.req.path;
   // Public auth routes
   if (path === "/api/auth/login" || path === "/api/auth/logout") {
@@ -223,6 +223,35 @@ api.get("/api/users/:id", async (c) => {
   const links = generateVlessLinks(user, settings.endpoints, wsPath, workerHost);
 
   return c.json({ user, links });
+});
+
+api.get("/api/users/:id/qr", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (isNaN(id)) return c.text("Invalid user ID", 400);
+
+  const user = await getUserById(c.env.DB, id);
+  if (!user) return c.text("User not found", 404);
+
+  const url = new URL(c.req.url);
+  const workerHost = url.hostname;
+  const wsPath = c.env.WS_PATH || "/api/v1/ws";
+  const settings = await getAllSettings(c.env.DB, workerHost);
+  const links = generateVlessLinks(user, settings.endpoints, wsPath, workerHost);
+
+  const linkIndex = parseInt(c.req.query("link_index") || "0") || 0;
+  const targetLink = links[linkIndex] || links[0];
+  if (!targetLink) return c.text("No links available", 404);
+
+  const { generateQrSvg } = await import("./qrcode");
+  const svg = generateQrSvg(targetLink.url, 256);
+
+  return new Response(svg, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "private, max-age=60",
+    },
+  });
 });
 
 api.put("/api/users/:id", async (c) => {
