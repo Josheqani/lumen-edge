@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { handleVlessWebSocket, renderCamouflageResponse } from "./core";
+import { api } from "./panel";
 
 export interface Env {
   DB: D1Database;
@@ -12,7 +13,7 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// VLESS WebSocket Proxy endpoint
+// 1. VLESS WebSocket Proxy endpoint
 app.all("*", async (c, next) => {
   const wsPath = c.env.WS_PATH || "/api/v1/ws";
   const url = new URL(c.req.url);
@@ -37,7 +38,10 @@ app.all("*", async (c, next) => {
   await next();
 });
 
-// Default fallback to camouflage landing page
+// 2. Panel API endpoints (/api/*)
+app.route("/", api);
+
+// 3. Camouflage landing page on root or 404
 app.get("/", () => {
   return renderCamouflageResponse();
 });
