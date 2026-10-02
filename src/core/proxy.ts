@@ -14,6 +14,25 @@ export interface MinimalExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
 }
 
+function decodeEarlyData(protocolHeader: string | null): Uint8Array | null {
+  if (!protocolHeader) return null;
+  try {
+    let b64 = protocolHeader.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4;
+    if (pad) {
+      b64 += "=".repeat(4 - pad);
+    }
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
 export async function handleVlessWebSocket(
   request: Request,
   env: ProxyEnv,
@@ -23,6 +42,9 @@ export async function handleVlessWebSocket(
   if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
     return renderCamouflageResponse();
   }
+
+  const earlyDataHeader = request.headers.get("sec-websocket-protocol");
+  const earlyData = decodeEarlyData(earlyDataHeader);
 
   const pair = new WebSocketPair();
   const clientWs = pair[0] as WebSocket;
@@ -68,29 +90,33 @@ export async function handleVlessWebSocket(
       };
 
       try {
-        // Wait for first message containing VLESS handshake
-        const firstMessage = await new Promise<ArrayBuffer | Uint8Array | null>(
-          (resolve) => {
-            const onMessage = (event: MessageEvent) => {
-              serverWs.removeEventListener("message", onMessage);
-              serverWs.removeEventListener("close", onClose);
-              serverWs.removeEventListener("error", onError);
-              if (event.data instanceof ArrayBuffer) {
-                resolve(event.data);
-              } else if (ArrayBuffer.isView(event.data)) {
-                resolve(event.data as Uint8Array);
-              } else {
-                resolve(null);
-              }
-            };
-            const onClose = () => resolve(null);
-            const onError = () => resolve(null);
+        // Read first message: either from 0-RTT early data or WebSocket binary frame
+        let firstMessage: ArrayBuffer | Uint8Array | null = earlyData;
 
-            serverWs.addEventListener("message", onMessage);
-            serverWs.addEventListener("close", onClose);
-            serverWs.addEventListener("error", onError);
-          }
-        );
+        if (!firstMessage) {
+          firstMessage = await new Promise<ArrayBuffer | Uint8Array | null>(
+            (resolve) => {
+              const onMessage = (event: MessageEvent) => {
+                serverWs.removeEventListener("message", onMessage);
+                serverWs.removeEventListener("close", onClose);
+                serverWs.removeEventListener("error", onError);
+                if (event.data instanceof ArrayBuffer) {
+                  resolve(event.data);
+                } else if (ArrayBuffer.isView(event.data)) {
+                  resolve(event.data as Uint8Array);
+                } else {
+                  resolve(null);
+                }
+              };
+              const onClose = () => resolve(null);
+              const onError = () => resolve(null);
+
+              serverWs.addEventListener("message", onMessage);
+              serverWs.addEventListener("close", onClose);
+              serverWs.addEventListener("error", onError);
+            }
+          );
+        }
 
         if (!firstMessage) {
           await cleanup();
@@ -116,6 +142,11 @@ export async function handleVlessWebSocket(
           await cleanup();
           return;
         }
+
+        // Support UDP DNS queries on port 53 by forwarding to 1.1.1.1:53 via TCP
+        const targetHost =
+          header.command === 2 && header.port === 53 ? "1.1.1.1" : header.address;
+        const targetPort = header.port;
 
         // Check for Backend VPS forwarding mode
         let settings = null;
@@ -177,12 +208,12 @@ export async function handleVlessWebSocket(
         // Establish outbound TCP connection (Direct or SOCKS5)
         try {
           outbound = await createOutboundConnection(
-            header.address,
-            header.port,
+            targetHost,
+            targetPort,
             env.DB
           );
         } catch (err) {
-          console.error(`Failed to connect to ${header.address}:${header.port}:`, err);
+          console.error(`Failed to connect to ${targetHost}:${targetPort}:`, err);
           await cleanup();
           return;
         }
@@ -267,8 +298,14 @@ export async function handleVlessWebSocket(
     })()
   );
 
+  const respHeaders: Record<string, string> = {};
+  if (earlyDataHeader) {
+    respHeaders["Sec-WebSocket-Protocol"] = earlyDataHeader;
+  }
+
   return new Response(null, {
     status: 101,
     webSocket: clientWs,
+    headers: respHeaders,
   });
 }
