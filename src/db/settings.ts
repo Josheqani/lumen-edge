@@ -74,6 +74,48 @@ export async function getAllSettings(
         sni: fallbackHost,
         host: fallbackHost,
       },
+      {
+        label: "MCI Clean 1 (Speed)",
+        address: "speed.cloudflare.com",
+        port: 443,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
+      {
+        label: "MCI Clean 2 (Anycast)",
+        address: "104.16.132.229",
+        port: 443,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
+      {
+        label: "MCI Clean 3 (CF DNS)",
+        address: "162.159.192.1",
+        port: 443,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
+      {
+        label: "MCI Clean 4 (172.64)",
+        address: "172.64.155.249",
+        port: 443,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
+      {
+        label: "MCI Alt Port (8443)",
+        address: "104.17.80.1",
+        port: 8443,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
+      {
+        label: "MCI Alt Port (2053)",
+        address: "104.20.74.82",
+        port: 2053,
+        sni: fallbackHost,
+        host: fallbackHost,
+      },
     ];
   }
 
